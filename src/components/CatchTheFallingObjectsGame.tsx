@@ -22,53 +22,91 @@ type GameStats = {
   bestCombo: number;
 };
 
+type DifficultyConfig = {
+  playerSpeed: number;
+  spawnIntervalBase: number;
+  spawnIntervalMin: number;
+  levelUpThreshold: number;
+  startingLives: number;
+};
+
 const GAME_WIDTH = 400;
 const GAME_HEIGHT = 600;
 const PLAYER_WIDTH = 82;
 const PLAYER_HEIGHT = 28;
 const PLAYER_Y = GAME_HEIGHT - 76;
+
 const ITEM_SCORES: Record<ItemType, number> = {
   apple: 10,
   star: 20,
   ball: 5,
+  golden: 50,
 };
 
 const ITEM_NAMES: Record<ItemType, string> = {
   apple: 'APPLE',
   star: 'STAR',
   ball: 'BALL',
+  golden: 'GOLDEN',
 };
 
 const ITEM_COLORS: Record<ItemType, string> = {
   apple: '#00ff66',
   star: '#ff00ff',
   ball: '#ff6600',
+  golden: '#ffd700',
 };
 
-// Balanced game speeds for better gameplay
 const ITEM_BASE_SPEED: Record<ItemType, number> = {
   apple: 2.2,
   star: 2.8,
   ball: 2.5,
+  golden: 2.0,
+};
+
+const DIFFICULTY_CONFIGS: Record<DifficultyMode, DifficultyConfig> = {
+  easy: {
+    playerSpeed: 0.55,
+    spawnIntervalBase: 1400,
+    spawnIntervalMin: 800,
+    levelUpThreshold: 200,
+    startingLives: 5,
+  },
+  normal: {
+    playerSpeed: 0.45,
+    spawnIntervalBase: 1200,
+    spawnIntervalMin: 600,
+    levelUpThreshold: 150,
+    startingLives: 3,
+  },
+  hard: {
+    playerSpeed: 0.38,
+    spawnIntervalBase: 1000,
+    spawnIntervalMin: 400,
+    levelUpThreshold: 100,
+    startingLives: 2,
+  },
 };
 
 // Better spawn intervals for smoother gameplay
-function getSpawnInterval(level: number) {
-  // Start at 1200ms, decrease by 80ms per level, minimum 600ms
-  return Math.max(1200 - (level - 1) * 80, 600);
+function getSpawnInterval(level: number, difficulty: DifficultyMode) {
+  const config = DIFFICULTY_CONFIGS[difficulty];
+  return Math.max(config.spawnIntervalBase - (level - 1) * 80, config.spawnIntervalMin);
 }
 
-// More balanced item distribution
+// More balanced item distribution with golden star power-up
 function randomType(): ItemType {
   const roll = Math.random();
-  if (roll < 0.35) return 'apple';      // 35% - common, low points
-  if (roll < 0.60) return 'ball';       // 25% - common, lowest points
-  return 'star';                         // 40% - less common, high points
+  if (roll < 0.02) return 'golden';     // 2% - rare power-up, 50 points
+  if (roll < 0.35) return 'apple';      // 33% - common, low points
+  if (roll < 0.58) return 'ball';       // 23% - common, lowest points
+  return 'star';                         // 42% - less common, high points
 }
 
 // Smoother level progression
-function getLevelFromScore(score: number): number {
-  return Math.floor(score / 150) + 1;  // Level up every 150 points instead of 100
+function getLevelFromScore(score: number, difficulty: DifficultyMode): number {
+  const config = DIFFICULTY_CONFIGS[difficulty];
+  return Math.floor(score / config.levelUpThreshold) + 1;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -83,6 +121,8 @@ function getItemIcon(type: ItemType) {
       return <Star size={18} fill={ITEM_COLORS.star} stroke={ITEM_COLORS.star} />;
     case 'ball':
       return <Circle size={16} fill={ITEM_COLORS.ball} stroke={ITEM_COLORS.ball} />;
+    case 'golden':
+      return <Star size={20} fill={ITEM_COLORS.golden} stroke={ITEM_COLORS.golden} />;
   }
 }
 
@@ -111,12 +151,34 @@ function GameStage({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Scoreboard({ score, lives, level }: { score: number; lives: number; level: number }) {
+function Scoreboard({ score, lives, level, combo, streak, highScore }: { 
+  score: number; 
+  lives: number; 
+  level: number;
+  combo: number;
+  streak: number;
+  highScore: number;
+}) {
   return (
-    <div className="absolute left-0 top-0 z-10 flex w-full items-center justify-between px-4 py-3 text-xs font-bold uppercase tracking-[0.1em]">
-      <div className="border-2 border-[#00ff66] bg-black px-3 py-1.5 text-[#00ff66]">SCORE: {score}</div>
-      <div className="border-2 border-[#ff0066] bg-black px-3 py-1.5 text-[#ff0066]">LIVES: {lives}</div>
-      <div className="border-2 border-[#00ccff] bg-black px-3 py-1.5 text-[#00ccff]">LVL: {level}</div>
+    <div className="absolute left-0 top-0 z-10 w-full px-4 py-3">
+      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.1em] mb-2">
+        <div className="border-2 border-[#00ff66] bg-black px-3 py-1.5 text-[#00ff66]">SCORE: {score}</div>
+        <div className="border-2 border-[#ff0066] bg-black px-3 py-1.5 text-[#ff0066]">LIVES: {lives}</div>
+        <div className="border-2 border-[#00ccff] bg-black px-3 py-1.5 text-[#00ccff]">LVL: {level}</div>
+      </div>
+      <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.1em]">
+        <div className="border-2 border-[#ffd700] bg-black px-3 py-1.5 text-[#ffd700]">HIGH: {highScore}</div>
+        {combo > 1 && (
+          <div className="border-2 border-[#ff00ff] bg-black px-3 py-1.5 text-[#ff00ff] animate-pulse">
+            COMBO: x{combo}
+          </div>
+        )}
+        {streak > 0 && (
+          <div className="border-2 border-[#00ff66] bg-black px-3 py-1.5 text-[#00ff66]">
+            STREAK: {streak}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -188,14 +250,23 @@ function FallingItems({ items }: { items: FallingItem[] }) {
 }
 
 export function CatchTheFallingObjectsGame() {
+  const [gameStarted, setGameStarted] = useState(false);
+  const [difficulty, setDifficulty] = useState<DifficultyMode>('normal');
   const [playerX, setPlayerX] = useState((GAME_WIDTH - PLAYER_WIDTH) / 2);
   const [items, setItems] = useState<FallingItem[]>([]);
   const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [level, setLevel] = useState(1);
+  const [combo, setCombo] = useState(0);
+  const [streak, setStreak] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [screenShake, setScreenShake] = useState(false);
+  const [gameStats, setGameStats] = useState<GameStats>({ totalCaught: 0, totalMissed: 0, bestCombo: 0 });
   const [lastCatch, setLastCatch] = useState<{ type: ItemType; points: number; x: number; y: number } | null>(null);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; color: string }>>([]);
+  
   const nextId = useRef(1);
   const particleId = useRef(1);
   const keysPressed = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
@@ -203,16 +274,23 @@ export function CatchTheFallingObjectsGame() {
   const spawnTimer = useRef(0);
   const scoreRef = useRef(0);
   const levelRef = useRef(1);
+  const comboRef = useRef(0);
+  const streakRef = useRef(0);
   const playerXRef = useRef((GAME_WIDTH - PLAYER_WIDTH) / 2);
   const catchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const scoredItemsRef = useRef<Set<number>>(new Set()); // Track items that have been scored
-  
-  // Audio context for sound effects
+  const scoredItemsRef = useRef<Set<number>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Initialize audio context
+  // Initialize audio context and load high score
   useEffect(() => {
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Load high score from localStorage
+    const savedHighScore = localStorage.getItem('catchGameHighScore');
+    if (savedHighScore) {
+      setHighScore(parseInt(savedHighScore, 10));
+    }
+    
     return () => {
       audioContextRef.current?.close();
     };
@@ -250,6 +328,11 @@ export function CatchTheFallingObjectsGame() {
       case 'ball':
         playSound(392.00, 0.1, 'square'); // G4
         break;
+      case 'golden':
+        playSound(880.00, 0.1, 'sine'); // A5
+        setTimeout(() => playSound(1046.50, 0.1, 'sine'), 50); // C6
+        setTimeout(() => playSound(1318.51, 0.15, 'sine'), 100); // E6
+        break;
     }
   };
 
@@ -284,24 +367,38 @@ export function CatchTheFallingObjectsGame() {
   };
 
   const resetGame = () => {
+    const config = DIFFICULTY_CONFIGS[difficulty];
     setPlayerX((GAME_WIDTH - PLAYER_WIDTH) / 2);
     playerXRef.current = (GAME_WIDTH - PLAYER_WIDTH) / 2;
     setItems([]);
     setScore(0);
-    setLives(3);
+    setLives(config.startingLives);
     setLevel(1);
+    setCombo(0);
+    setStreak(0);
     setGameOver(false);
+    setPaused(false);
     setLastCatch(null);
     setParticles([]);
+    setGameStats({ totalCaught: 0, totalMissed: 0, bestCombo: 0 });
     scoreRef.current = 0;
     levelRef.current = 1;
-    scoredItemsRef.current.clear(); // Clear scored items
+    comboRef.current = 0;
+    streakRef.current = 0;
+    scoredItemsRef.current.clear();
     keysPressed.current = { left: false, right: false };
     lastFrame.current = null;
     spawnTimer.current = 0;
     if (catchTimeoutRef.current) {
       clearTimeout(catchTimeoutRef.current);
     }
+  };
+
+  const startGame = (selectedDifficulty: DifficultyMode) => {
+    setDifficulty(selectedDifficulty);
+    setGameStarted(true);
+    const config = DIFFICULTY_CONFIGS[selectedDifficulty];
+    setLives(config.startingLives);
   };
 
   useEffect(() => {
@@ -314,6 +411,9 @@ export function CatchTheFallingObjectsGame() {
       }
       if (event.key === 'Enter' && gameOver) {
         resetGame();
+      }
+      if ((event.key === 'p' || event.key === 'P') && gameStarted && !gameOver) {
+        setPaused(prev => !prev);
       }
     };
 
@@ -332,19 +432,19 @@ export function CatchTheFallingObjectsGame() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [gameOver]);
+  }, [gameOver, gameStarted]);
 
   useEffect(() => {
-    if (gameOver) {
+    if (gameOver || !gameStarted || paused) {
       return;
     }
 
+    const config = DIFFICULTY_CONFIGS[difficulty];
     let animationFrameId = 0;
-    let isRunning = true; // Flag to prevent duplicate loops
+    let isRunning = true;
 
     const loop = (timestamp: number) => {
       if (!isRunning) {
-        console.log('Loop stopped - isRunning is false');
         return;
       }
 
@@ -356,7 +456,7 @@ export function CatchTheFallingObjectsGame() {
       lastFrame.current = timestamp;
 
       setPlayerX((currentX) => {
-        const speed = 0.45 * delta; // Increased player speed for better control
+        const speed = config.playerSpeed * delta;
         let nextX = currentX;
         if (keysPressed.current.left) {
           nextX -= speed;
@@ -376,15 +476,15 @@ export function CatchTheFallingObjectsGame() {
         let scoreDelta = 0;
         let lifeDelta = 0;
         let caughtItem: { type: ItemType; points: number; x: number; y: number } | null = null;
-        const processedIds = new Set<number>(); // Track processed items
+        const processedIds = new Set<number>();
+        let itemsCaught = 0;
+        let itemsMissed = 0;
 
         for (const item of currentItems) {
-          // Skip if already processed in this frame
           if (processedIds.has(item.id)) {
             continue;
           }
           
-          // Skip if already scored (prevents double scoring across frames)
           if (scoredItemsRef.current.has(item.id)) {
             continue;
           }
@@ -407,24 +507,33 @@ export function CatchTheFallingObjectsGame() {
             itemLeft <= playerRight;
 
           if (isCaught) {
-            const points = ITEM_SCORES[item.type];
+            const basePoints = ITEM_SCORES[item.type];
+            const comboMultiplier = Math.min(comboRef.current + 1, 5);
+            const points = basePoints * comboMultiplier;
             scoreDelta += points;
             caughtItem = { type: item.type, points, x: item.x + item.size / 2, y: nextY };
             
-            // Mark as scored to prevent double scoring
             scoredItemsRef.current.add(item.id);
+            itemsCaught++;
+            
+            // Increment combo and streak
+            comboRef.current = comboMultiplier;
+            streakRef.current++;
             
             playCatchSound(item.type);
             createParticles(item.x + item.size / 2, nextY, ITEM_COLORS[item.type]);
             
-            console.log(`Caught ${item.type}! +${points} points. Total: ${scoreRef.current + scoreDelta}`);
             continue;
           }
 
           if (nextY > GAME_HEIGHT) {
             lifeDelta -= 1;
+            itemsMissed++;
+            
+            // Reset combo on miss
+            comboRef.current = 0;
+            
             playMissSound();
-            console.log(`Missed ${item.type}! -1 life`);
             continue;
           }
 
@@ -435,16 +544,22 @@ export function CatchTheFallingObjectsGame() {
           const newScore = scoreRef.current + scoreDelta;
           scoreRef.current = newScore;
           setScore(newScore);
+          setCombo(comboRef.current);
+          setStreak(streakRef.current);
           
-          const nextLevel = getLevelFromScore(newScore);
+          // Update high score
+          if (newScore > highScore) {
+            setHighScore(newScore);
+            localStorage.setItem('catchGameHighScore', newScore.toString());
+          }
+          
+          const nextLevel = getLevelFromScore(newScore, difficulty);
           if (nextLevel !== levelRef.current) {
             levelRef.current = nextLevel;
             setLevel(nextLevel);
             playLevelUpSound();
-            console.log(`Level up! Now at level ${nextLevel}`);
           }
           
-          // Show catch feedback
           if (caughtItem) {
             setLastCatch(caughtItem);
             if (catchTimeoutRef.current) {
@@ -456,7 +571,19 @@ export function CatchTheFallingObjectsGame() {
           }
         }
 
+        if (itemsCaught > 0 || itemsMissed > 0) {
+          setGameStats(prev => ({
+            totalCaught: prev.totalCaught + itemsCaught,
+            totalMissed: prev.totalMissed + itemsMissed,
+            bestCombo: Math.max(prev.bestCombo, comboRef.current),
+          }));
+        }
+
         if (lifeDelta < 0) {
+          // Trigger screen shake
+          setScreenShake(true);
+          setTimeout(() => setScreenShake(false), 500);
+          
           setLives((currentLives) => {
             const updatedLives = currentLives + lifeDelta;
             if (updatedLives <= 0) {
@@ -472,10 +599,10 @@ export function CatchTheFallingObjectsGame() {
       });
 
       spawnTimer.current += delta;
-      if (spawnTimer.current >= getSpawnInterval(levelRef.current)) {
+      if (spawnTimer.current >= getSpawnInterval(levelRef.current, difficulty)) {
         spawnTimer.current = 0;
         const type = randomType();
-        const size = 24 + (type === 'star' ? 4 : 0);
+        const size = 24 + (type === 'star' ? 4 : 0) + (type === 'golden' ? 6 : 0);
         const x = Math.random() * (GAME_WIDTH - size - 12) + 6;
         setItems((currentItems) => [
           ...currentItems,
@@ -489,17 +616,17 @@ export function CatchTheFallingObjectsGame() {
         ]);
       }
 
-      if (!gameOver && isRunning) {
+      if (!gameOver && isRunning && !paused) {
         animationFrameId = window.requestAnimationFrame(loop);
       }
     };
 
     animationFrameId = window.requestAnimationFrame(loop);
     return () => {
-      isRunning = false; // Stop the loop
+      isRunning = false;
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [gameOver]);
+  }, [gameOver, gameStarted, paused, difficulty, highScore]);
 
   return (
     <section className="flex h-screen w-screen items-center justify-center bg-black font-mono overflow-hidden">
@@ -529,6 +656,11 @@ export function CatchTheFallingObjectsGame() {
           text-shadow: 0 0 20px rgba(255, 0, 102, 0.5);
         }
         
+        .neon-gold {
+          color: #ffd700;
+          text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+        
         .brutalist-btn {
           background: #00ff66;
           color: #000000;
@@ -541,6 +673,36 @@ export function CatchTheFallingObjectsGame() {
         
         .brutalist-btn:hover {
           box-shadow: 0 0 30px rgba(0, 255, 102, 0.6);
+          transform: translateY(-2px);
+        }
+        
+        .brutalist-btn-secondary {
+          background: #ff00ff;
+          color: #000000;
+          border: 3px solid #ff00ff;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          transition: all 0.2s ease;
+        }
+        
+        .brutalist-btn-secondary:hover {
+          box-shadow: 0 0 30px rgba(255, 0, 255, 0.6);
+          transform: translateY(-2px);
+        }
+        
+        .brutalist-btn-danger {
+          background: #ff6600;
+          color: #000000;
+          border: 3px solid #ff6600;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          transition: all 0.2s ease;
+        }
+        
+        .brutalist-btn-danger:hover {
+          box-shadow: 0 0 30px rgba(255, 102, 0, 0.6);
           transform: translateY(-2px);
         }
         
@@ -566,67 +728,135 @@ export function CatchTheFallingObjectsGame() {
           pointer-events: none;
           z-index: 10;
         }
+        
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        
+        .screen-shake {
+          animation: shake 0.5s;
+        }
       `}</style>
 
-      <div className="flex flex-col items-center">
-        <GameStage>
-          <Scoreboard score={score} lives={lives} level={level} />
-          <FallingItems items={items} />
-          <PlayerContainer x={playerX} />
-
-          {/* Particle effects */}
-          {particles.map((particle) => (
-            <div
-              key={particle.id}
-              className="absolute w-2 h-2 rounded-full animate-ping"
-              style={{
-                left: `${particle.x}px`,
-                top: `${particle.y}px`,
-                backgroundColor: particle.color,
-                boxShadow: `0 0 10px ${particle.color}`,
-              }}
-            />
-          ))}
-
-          {/* Score popup on catch */}
-          {lastCatch && (
-            <div
-              className="absolute z-30 animate-bounce"
-              style={{
-                left: `${lastCatch.x}px`,
-                top: `${lastCatch.y}px`,
-                transform: 'translate(-50%, -50%)',
-              }}
+      {!gameStarted ? (
+        <div className="border-[3px] border-[#00ff66] bg-black p-12 text-center">
+          <h1 className="mb-8 text-5xl font-black neon-green">CATCH THE FALLING OBJECTS</h1>
+          <p className="mb-8 text-sm uppercase tracking-wider text-[#aaaaaa]">SELECT DIFFICULTY</p>
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={() => startGame('easy')}
+              className="brutalist-btn px-12 py-4 text-lg"
             >
-              <div className="border-2 border-[#00ff66] bg-black px-3 py-1 text-lg font-black neon-green">
-                +{lastCatch.points}
-              </div>
-            </div>
-          )}
-
-          <div className="absolute inset-x-0 bottom-4 z-20 text-center text-xs font-bold uppercase tracking-[0.2em] neon-cyan">
-            {gameOver ? 'GAME OVER - PRESS ENTER' : 'USE ARROW KEYS'}
+              EASY - 5 LIVES
+            </button>
+            <button
+              onClick={() => startGame('normal')}
+              className="brutalist-btn-secondary px-12 py-4 text-lg"
+            >
+              NORMAL - 3 LIVES
+            </button>
+            <button
+              onClick={() => startGame('hard')}
+              className="brutalist-btn-danger px-12 py-4 text-lg"
+            >
+              HARD - 2 LIVES
+            </button>
           </div>
+          <div className="mt-8 text-xs uppercase tracking-wider text-[#666666]">
+            <p>ARROW KEYS TO MOVE • P TO PAUSE</p>
+            <p className="mt-2">COMBO MULTIPLIER UP TO x5</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center">
+          <div className={screenShake ? 'screen-shake' : ''}>
+            <GameStage>
+              <Scoreboard 
+                score={score} 
+                lives={lives} 
+                level={level} 
+                combo={combo}
+                streak={streak}
+                highScore={highScore}
+              />
+              <FallingItems items={items} />
+              <PlayerContainer x={playerX} />
 
-          {gameOver ? (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/90">
-              <div className="border-[3px] border-[#ff0066] bg-black p-8 text-center animate-pulse">
-                <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] neon-pink">GAME OVER</p>
-                <h2 className="mb-4 text-4xl font-black neon-green">SCORE: {score}</h2>
-                <p className="text-xs uppercase tracking-wider text-[#aaaaaa]">PRESS RESTART OR ENTER</p>
+              {particles.map((particle) => (
+                <div
+                  key={particle.id}
+                  className="absolute w-2 h-2 rounded-full animate-ping"
+                  style={{
+                    left: `${particle.x}px`,
+                    top: `${particle.y}px`,
+                    backgroundColor: particle.color,
+                    boxShadow: `0 0 10px ${particle.color}`,
+                  }}
+                />
+              ))}
+
+              {lastCatch && (
+                <div
+                  className="absolute z-30 animate-bounce"
+                  style={{
+                    left: `${lastCatch.x}px`,
+                    top: `${lastCatch.y}px`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                >
+                  <div className="border-2 border-[#00ff66] bg-black px-3 py-1 text-lg font-black neon-green">
+                    +{lastCatch.points}
+                  </div>
+                </div>
+              )}
+
+              <div className="absolute inset-x-0 bottom-4 z-20 text-center text-xs font-bold uppercase tracking-[0.2em] neon-cyan">
+                {gameOver ? 'GAME OVER - PRESS ENTER' : paused ? 'PAUSED - PRESS P' : 'USE ARROW KEYS • P TO PAUSE'}
               </div>
-            </div>
-          ) : null}
-        </GameStage>
-        
-        <button
-          type="button"
-          onClick={resetGame}
-          className="brutalist-btn mt-6 px-8 py-3 text-sm flex items-center gap-2 justify-center"
-        >
-          <RotateCcw size={16} /> RESTART GAME
-        </button>
-      </div>
+
+              {paused && !gameOver && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80">
+                  <div className="border-[3px] border-[#00ccff] bg-black p-8 text-center">
+                    <p className="mb-4 text-3xl font-black neon-cyan">PAUSED</p>
+                    <p className="text-xs uppercase tracking-wider text-[#aaaaaa]">PRESS P TO RESUME</p>
+                  </div>
+                </div>
+              )}
+
+              {gameOver && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/90">
+                  <div className="border-[3px] border-[#ff0066] bg-black p-8 text-center animate-pulse">
+                    <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] neon-pink">GAME OVER</p>
+                    <h2 className="mb-4 text-4xl font-black neon-green">SCORE: {score}</h2>
+                    {score === highScore && score > 0 && (
+                      <p className="mb-4 text-sm font-bold uppercase tracking-wider neon-gold">★ NEW HIGH SCORE! ★</p>
+                    )}
+                    <div className="mb-4 border-t-2 border-[#333333] pt-4 text-xs uppercase tracking-wider text-[#aaaaaa]">
+                      <p>ITEMS CAUGHT: {gameStats.totalCaught}</p>
+                      <p>ITEMS MISSED: {gameStats.totalMissed}</p>
+                      <p>ACCURACY: {gameStats.totalCaught + gameStats.totalMissed > 0 
+                        ? Math.round((gameStats.totalCaught / (gameStats.totalCaught + gameStats.totalMissed)) * 100) 
+                        : 0}%</p>
+                      <p>BEST COMBO: x{gameStats.bestCombo}</p>
+                    </div>
+                    <p className="text-xs uppercase tracking-wider text-[#aaaaaa]">PRESS RESTART OR ENTER</p>
+                  </div>
+                </div>
+              )}
+            </GameStage>
+          </div>
+          
+          <button
+            type="button"
+            onClick={resetGame}
+            className="brutalist-btn mt-6 px-8 py-3 text-sm flex items-center gap-2 justify-center"
+          >
+            <RotateCcw size={16} /> RESTART GAME
+          </button>
+        </div>
+      )}
     </section>
   );
 }
